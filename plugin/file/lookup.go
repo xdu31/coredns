@@ -56,10 +56,10 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 	}
 
 	var (
-		found, shot    bool
-		parts          string
-		i              int
-		elem, wildElem *tree.Elem
+		found, foundCe, shot bool
+		parts                string
+		i                    int
+		elem, wildElem, ce   *tree.Elem
 	)
 
 	loop, _ := ctx.Value(dnsserver.LoopKey{}).(int)
@@ -197,11 +197,26 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	}
 
+	ce, foundCe = z.ClosestEncloser(qname)
+
 	// Haven't found the original name.
 
 	// Found wildcard.
 	if wildElem != nil {
 		auth := ap.ns(do)
+
+		if foundCe {
+			// wildcard denial
+			wildcard := "*." + ce.Name()
+			if wildcard != wildElem.Name() {
+				ret := ap.soa(do)
+				if do {
+					nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
+					ret = append(ret, nsec...)
+				}
+				return nil, ret, nil, NameError
+			}
+		}
 
 		if rrs := wildElem.TypeForWildcard(dns.TypeCNAME, qname); len(rrs) > 0 {
 			ctx = context.WithValue(ctx, dnsserver.LoopKey{}, loop+1)
@@ -232,6 +247,7 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			rrs = append(rrs, sigs...)
 
 		}
+
 		return rrs, auth, nil, Success
 	}
 
@@ -258,10 +274,8 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			goto Out
 		}
 
-		ce, found := z.ClosestEncloser(qname)
-
 		// wildcard denial only for NXDOMAIN
-		if found {
+		if foundCe {
 			// wildcard denial
 			wildcard := "*." + ce.Name()
 			if ss, found := tr.Prev(wildcard); found {
