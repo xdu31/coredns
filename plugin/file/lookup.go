@@ -204,18 +204,14 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 	// Found wildcard.
 	if wildElem != nil {
 		auth := ap.ns(do)
-
-		if foundCe {
+		if foundCe && dns.CountLabel(ce.Name())+1 > dns.CountLabel(wildElem.Name()) {
 			// wildcard denial
-			wildcard := "*." + ce.Name()
-			if wildcard != wildElem.Name() {
-				ret := ap.soa(do)
-				if do {
-					nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
-					ret = append(ret, nsec...)
-				}
-				return nil, ret, nil, NameError
+			ret := ap.soa(do)
+			if do {
+				nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
+				ret = append(ret, nsec...)
 			}
+			return nil, ret, nil, NameError
 		}
 
 		if rrs := wildElem.TypeForWildcard(dns.TypeCNAME, qname); len(rrs) > 0 {
