@@ -243,7 +243,6 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			rrs = append(rrs, sigs...)
 
 		}
-
 		return rrs, auth, nil, Success
 	}
 
