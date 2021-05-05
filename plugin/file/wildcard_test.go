@@ -283,6 +283,11 @@ var cornerCasesWildcardTestCases = []test.Case{
 		Ns: []dns.RR{test.NS(`example.org. 3600 IN NS b.iana-servers.net.`)},
 	},
 	{
+		Qname: "something.c.d.example.org.", Qtype: dns.TypeA,
+		Ns: []dns.RR{test.SOA(`example.org.		IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2015082541 7200 3600 1209600 3600`)},
+		Rcode: dns.RcodeNameError,
+	},
+	{
 		Qname: "something.r.c.d.example.org.", Qtype: dns.TypeA,
 		Ns: []dns.RR{test.SOA(`example.org.		IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2015082541 7200 3600 1209600 3600`)},
 		Rcode: dns.RcodeNameError,

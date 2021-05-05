@@ -56,10 +56,10 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 	}
 
 	var (
-		found, foundCe, shot bool
-		parts                string
-		i                    int
-		elem, wildElem, ce   *tree.Elem
+		found, shot                               bool
+		parts                                     string
+		i                                         int
+		elem, wildElem, nextElem, nextElemNotNull *tree.Elem
 	)
 
 	loop, _ := ctx.Value(dnsserver.LoopKey{}).(int)
@@ -90,6 +90,11 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 		// We overshot the name, break and check if we previously found something.
 		if shot {
 			break
+		}
+
+		nextElem, found = tr.Next(parts)
+		if found {
+			nextElemNotNull = nextElem
 		}
 
 		elem, found = tr.Search(parts)
@@ -197,15 +202,14 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	}
 
-	ce, foundCe = z.ClosestEncloser(qname)
-
 	// Haven't found the original name.
 
 	// Found wildcard.
 	if wildElem != nil {
-		auth := ap.ns(do)
-		if foundCe && dns.CountLabel(ce.Name())+1 > dns.CountLabel(wildElem.Name()) {
-			// wildcard denial
+		// if the domain's ternimal is neither the matching wildcard, nor a domain directly under the wildcard:
+		// in other words, the number of labels of the domain's terminal and the matched wildcard are equal
+		if nextElemNotNull != nil &&
+			dns.CountLabel(nextElemNotNull.Name()) != dns.CountLabel(wildElem.Name()) {
 			ret := ap.soa(do)
 			if do {
 				nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
@@ -214,6 +218,7 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			return nil, ret, nil, NameError
 		}
 
+		auth := ap.ns(do)
 		if rrs := wildElem.TypeForWildcard(dns.TypeCNAME, qname); len(rrs) > 0 {
 			ctx = context.WithValue(ctx, dnsserver.LoopKey{}, loop+1)
 			return z.externalLookup(ctx, state, wildElem, rrs)
@@ -250,8 +255,8 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	// Hacky way to get around empty-non-terminals. If a longer name does exist, but this qname, does not, it
 	// must be an empty-non-terminal. If so, we do the proper NXDOMAIN handling, but set the rcode to be success.
-	if x, found := tr.Next(qname); found {
-		if dns.IsSubDomain(qname, x.Name()) {
+	if nextElem != nil {
+		if dns.IsSubDomain(qname, nextElem.Name()) {
 			rcode = Success
 		}
 	}
@@ -269,8 +274,10 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			goto Out
 		}
 
+		ce, found := z.ClosestEncloser(qname)
+
 		// wildcard denial only for NXDOMAIN
-		if foundCe {
+		if found {
 			// wildcard denial
 			wildcard := "*." + ce.Name()
 			if ss, found := tr.Prev(wildcard); found {
