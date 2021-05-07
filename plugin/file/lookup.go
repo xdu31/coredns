@@ -56,10 +56,10 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 	}
 
 	var (
-		found, shot                               bool
-		parts                                     string
-		i                                         int
-		elem, wildElem, nextElem, nextElemNotNull *tree.Elem
+		found, shot              bool
+		parts, ne                string
+		i                        int
+		elem, wildElem, nextElem *tree.Elem
 	)
 
 	loop, _ := ctx.Value(dnsserver.LoopKey{}).(int)
@@ -92,9 +92,10 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 			break
 		}
 
-		nextElem, found = tr.Next(parts)
-		if found {
-			nextElemNotNull = nextElem
+		if nextElem, found = tr.Next(parts); found {
+			if dns.IsSubDomain(parts, nextElem.Name()) {
+				ne = nextElem.Name()
+			}
 		}
 
 		elem, found = tr.Search(parts)
@@ -207,9 +208,8 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 	// Found wildcard.
 	if wildElem != nil {
 		// if the domain's ternimal is neither the matching wildcard, nor a domain directly under the wildcard:
-		// in other words, the number of labels of the domain's terminal and the matched wildcard are equal
-		if nextElemNotNull != nil &&
-			dns.CountLabel(nextElemNotNull.Name()) != dns.CountLabel(wildElem.Name()) {
+		// in other words, the number of labels of the domain's terminal is greater than the matched wildcard
+		if dns.CountLabel(ne) > dns.CountLabel(wildElem.Name()) {
 			ret := ap.soa(do)
 			if do {
 				nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
@@ -255,8 +255,8 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	// Hacky way to get around empty-non-terminals. If a longer name does exist, but this qname, does not, it
 	// must be an empty-non-terminal. If so, we do the proper NXDOMAIN handling, but set the rcode to be success.
-	if nextElem != nil {
-		if dns.IsSubDomain(qname, nextElem.Name()) {
+	if x, found := tr.Next(qname); found {
+		if dns.IsSubDomain(qname, x.Name()) {
 			rcode = Success
 		}
 	}
