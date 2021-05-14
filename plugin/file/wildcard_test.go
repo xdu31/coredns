@@ -292,6 +292,21 @@ var cornerCasesWildcardTestCases = []test.Case{
 		Ns: []dns.RR{test.SOA(`example.org.		IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2015082541 7200 3600 1209600 3600`)},
 		Rcode: dns.RcodeNameError,
 	},
+	{
+		Qname: "z.+.d.example.org.", Qtype: dns.TypeA,
+		Answer: []dns.RR{test.A(`z.+.d.example.org.	3600	IN	A	127.0.1.53`)},
+		Ns: []dns.RR{test.NS(`example.org. 3600 IN NS b.iana-servers.net.`)},
+	},
+	{
+		Qname: "x.&.d.example.org.", Qtype: dns.TypeA,
+		Answer: []dns.RR{test.A(`x.&.d.example.org.	3600	IN	A	127.0.1.53`)},
+		Ns: []dns.RR{test.NS(`example.org. 3600 IN NS b.iana-servers.net.`)},
+	},
+	{
+		Qname: "something.x.&.d.example.org.", Qtype: dns.TypeA,
+		Ns: []dns.RR{test.SOA(`example.org.		IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2015082541 7200 3600 1209600 3600`)},
+		Rcode: dns.RcodeNameError,
+	},
 }
 
 func TestLookupCornerCasesWildcard(t *testing.T) {
@@ -357,5 +372,7 @@ $TTL 3600
 example.org.		IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2015082541 7200 3600 1209600 3600
 example.org.		IN	NS	b.iana-servers.net.
 *.d.example.org.        IN      A       127.0.1.53
+z.+.d.example.org.		IN		A		127.0.1.53
+x.&.d.example.org.		IN		A		127.0.1.53
 r.c.d.example.org.      IN      A       127.0.1.52
 `

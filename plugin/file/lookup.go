@@ -57,8 +57,8 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	var (
 		found, shot              bool
-		parts, ne                string
-		i                        int
+		parts                    string
+		i, maxLabelNum           int
 		elem, wildElem, nextElem *tree.Elem
 	)
 
@@ -94,7 +94,7 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 		if nextElem, found = tr.Next(parts); found {
 			if dns.IsSubDomain(parts, nextElem.Name()) {
-				ne = nextElem.Name()
+				maxLabelNum = z.origLen + i
 			}
 		}
 
@@ -207,9 +207,9 @@ func (z *Zone) Lookup(ctx context.Context, state request.Request, qname string) 
 
 	// Found wildcard.
 	if wildElem != nil {
-		// if the domain's ternimal is neither the matching wildcard, nor a domain directly under the wildcard:
-		// in other words, the number of labels of the domain's terminal is greater than the matched wildcard
-		if dns.CountLabel(ne) > dns.CountLabel(wildElem.Name()) {
+		// if the domain's longest matching parent domain is subdomain of the wildcard,
+		// in other words, the domain‘s max number of labels matched is >= number of labels of the wildcard
+		if maxLabelNum >= dns.CountLabel(wildElem.Name()) {
 			ret := ap.soa(do)
 			if do {
 				nsec := typeFromElem(wildElem, dns.TypeNSEC, do)
